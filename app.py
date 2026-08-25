@@ -3,9 +3,9 @@ import sqlite3
 import pandas as pd
 
 # ---------------------------------------------------------
-# Configurazione Pagina (Mobile-friendly)
+# Configurazione Pagina
 # ---------------------------------------------------------
-st.set_page_config(page_title="La Mia Libreria", page_icon="📚", layout="centered")
+st.set_page_config(page_title="I Miei Libri", page_icon="📚", layout="centered")
 
 # ---------------------------------------------------------
 # Gestione Database SQLite
@@ -72,35 +72,73 @@ def delete_libro(libro_id):
     conn.commit()
     conn.close()
 
-# Inizializza il DB all'avvio
+# Inizializza DB all'avvio
 init_db()
 
 # ---------------------------------------------------------
 # Interfaccia Utente (Streamlit UI)
 # ---------------------------------------------------------
-st.title("📚 Il Mio Catalogo Libri")
+st.title("📚 Catalogo Libri")
 
 menu = st.sidebar.radio("Navigazione", ["📖 Catalogo", "➕ Nuovo Libro", "✏️ Modifica / Elimina"])
 
-# 1. SCHERMATA: CATALOGO
+# 1. SCHERMATA: CATALOGO CON FILTRI AVANZATI
 if menu == "📖 Catalogo":
-    st.subheader("Elenco Libri")
+    st.subheader("Elenco e Ricerca Libri")
     df = get_libri()
     
     if df.empty:
-        st.info("Nessun libro inserito finora. Vai su '➕ Nuovo Libro' per aggiungerne uno.")
+        st.info("Nessun libro presente. Vai su '➕ Nuovo Libro' per iniziare ad aggiungerne!")
     else:
-        # Ricerca per filtro rapido
-        filtro = st.text_input("🔍 Cerca per titolo, autore o ubicazione", "")
-        if filtro:
-            df = df[
-                df["titolo"].str.contains(filtro, case=False, na=False) |
-                df["autore"].str.contains(filtro, case=False, na=False) |
-                df["ubicazione"].str.contains(filtro, case=False, na=False)
+        # Sezione Filtri espandibile
+        with st.expander("🔍 Filtri di ricerca avanzati", expanded=True):
+            # 1. Ricerca testuale rapida
+            testo_ricerca = st.text_input("Cerca per parola chiave (nel titolo o descrizione):", placeholder="es. avventura, nome...")
+
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # 2. Filtro Autore
+                autori_unici = sorted([a for a in df["autore"].dropna().unique() if a.strip()])
+                autori_selezionati = st.multiselect("Filtra per Autore:", options=autori_unici)
+                
+            with col2:
+                # 3. Filtro Ubicazione
+                ubicazioni_uniche = sorted([u for u in df["ubicazione"].dropna().unique() if u.strip()])
+                ubicazioni_selezionate = st.multiselect("Filtra per Ubicazione:", options=ubicazioni_uniche)
+
+            # 4. Filtro per Range di Voto
+            voto_min, voto_max = st.slider("Filtra per Valutazione (Voto)", min_value=1, max_value=10, value=(1, 10))
+
+        # --- Applicazione dei Filtri al DataFrame ---
+        df_filtrato = df.copy()
+
+        # Filtro testo (titolo o descrizione)
+        if testo_ricerca:
+            df_filtrato = df_filtrato[
+                df_filtrato["titolo"].str.contains(testo_ricerca, case=False, na=False) |
+                df_filtrato["descrizione"].str.contains(testo_ricerca, case=False, na=False)
             ]
-        
-        # Rinominazione colonne per visualizzazione pulita
-        df_display = df.rename(columns={
+
+        # Filtro per Autori selezionati
+        if autori_selezionati:
+            df_filtrato = df_filtrato[df_filtrato["autore"].isin(autori_selezionati)]
+
+        # Filtro per Ubicazioni selezionate
+        if ubicazioni_selezionate:
+            df_filtrato = df_filtrato[df_filtrato["ubicazione"].isin(ubicazioni_selezionate)]
+
+        # Filtro per Valutazione
+        df_filtrato = df_filtrato[
+            (df_filtrato["valutazione"] >= voto_min) & 
+            (df_filtrato["valutazione"] <= voto_max)
+        ]
+
+        # Indicatore numero risultati trovati
+        st.caption(f"Trovati **{len(df_filtrato)}** libri su {len(df)} totali")
+
+        # Tabella visualizzata
+        df_display = df_filtrato.rename(columns={
             "id": "ID",
             "titolo": "Titolo",
             "autore": "Autore",
@@ -108,6 +146,7 @@ if menu == "📖 Catalogo":
             "valutazione": "Voto (1-10)",
             "ubicazione": "Ubicazione"
         })
+        
         st.dataframe(df_display, use_container_width=True, hide_index=True)
 
 # 2. SCHERMATA: AGGIUNGI LIBRO
@@ -137,12 +176,10 @@ elif menu == "✏️ Modifica / Elimina":
     if df.empty:
         st.info("Nessun libro disponibile da modificare.")
     else:
-        # Selezione tramite menu a tendina
         opzioni = {f"ID {row['id']} - {row['titolo']} ({row['autore']})": row['id'] for _, row in df.iterrows()}
         scelta = st.selectbox("Seleziona il libro da modificare:", list(opzioni.keys()))
         libro_id = opzioni[scelta]
         
-        # Recupera dati correnti
         libro_selezionato = get_libro_by_id(libro_id)
         
         if libro_selezionato:
@@ -156,9 +193,7 @@ elif menu == "✏️ Modifica / Elimina":
                 nuova_val = st.slider("Valutazione (1-10)", min_value=1, max_value=10, value=int(curr_val) if curr_val else 5)
                 nuova_ubic = st.text_input("Ubicazione", value=curr_ubic if curr_ubic else "")
                 
-                col1, col2 = st.columns([1, 1])
-                with col1:
-                    btn_aggiorna = st.form_submit_button("🔄 Aggiorna Dati")
+                btn_aggiorna = st.form_submit_button("🔄 Aggiorna Dati")
                 
             if btn_aggiorna:
                 if not nuovo_titolo.strip() or not nuovo_autore.strip():
@@ -168,7 +203,6 @@ elif menu == "✏️ Modifica / Elimina":
                     st.success("Dati aggiornati correttamente!")
                     st.rerun()
 
-            # Opzione di eliminazione separata per sicurezza
             st.divider()
             with st.expander("🗑️ Zona Pericolo - Elimina Libro"):
                 st.warning("L'eliminazione è irreversibile.")
