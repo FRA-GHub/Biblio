@@ -1,0 +1,9 @@
+# Streamlit secrets (contiene chiavi di sicurezza private)
+.streamlit/secrets.toml
+
+# Python cache & virtualenv
+__pycache__/
+*.py[cod]
+.env
+venv/
+.venv/
