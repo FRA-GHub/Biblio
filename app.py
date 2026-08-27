@@ -27,18 +27,19 @@ def get_libri():
         data = response.data
         if data:
             return pd.DataFrame(data)
-        return pd.DataFrame(columns=["id", "titolo", "autore", "descrizione", "valutazione", "ubicazione"])
+        return pd.DataFrame(columns=["id", "titolo", "autore", "edizione_anno", "descrizione", "valutazione", "ubicazione"])
     except Exception as e:
         st.error(f"Errore di connessione a Supabase: {e}")
         return pd.DataFrame()
 
-def add_libro(titolo, autore, descrizione, valutazione, ubicazione):
+def add_libro(titolo, autore, descrizione, valutazione, ubicazione, edizione_anno=""):
     payload = {
         "titolo": titolo,
         "autore": autore,
         "descrizione": descrizione,
         "valutazione": valutazione,
-        "ubicazione": ubicazione
+        "ubicazione": ubicazione,
+        "edizione_anno": edizione_anno
     }
     supabase.table("libri").insert(payload).execute()
 
@@ -48,13 +49,14 @@ def get_libro_by_id(libro_id):
         return response.data[0]
     return None
 
-def update_libro(libro_id, titolo, autore, descrizione, valutazione, ubicazione):
+def update_libro(libro_id, titolo, autore, descrizione, valutazione, ubicazione, edizione_anno=""):
     payload = {
         "titolo": titolo,
         "autore": autore,
         "descrizione": descrizione,
         "valutazione": valutazione,
-        "ubicazione": ubicazione
+        "ubicazione": ubicazione,
+        "edizione_anno": edizione_anno
     }
     supabase.table("libri").update(payload).eq("id", libro_id).execute()
 
@@ -114,11 +116,12 @@ if menu == "📖 Catalogo":
 
         st.caption(f"Trovati **{len(df_filtrato)}** libri su {len(df)} totali")
 
-        colonne_da_mostrare = ["id", "titolo", "autore", "descrizione", "valutazione", "ubicazione"]
+        colonne_da_mostrare = ["id", "titolo", "autore", "edizione_anno", "descrizione", "valutazione", "ubicazione"]
         df_display = df_filtrato[[c for c in colonne_da_mostrare if c in df_filtrato.columns]].rename(columns={
             "id": "ID",
             "titolo": "Titolo",
             "autore": "Autore",
+            "edizione_anno": "Edizione / Anno",
             "descrizione": "Descrizione",
             "valutazione": "Voto (1-10)",
             "ubicazione": "Ubicazione"
@@ -133,6 +136,7 @@ elif menu == "➕ Nuovo Libro":
     with st.form("form_nuovo_libro", clear_on_submit=True):
         titolo = st.text_input("Titolo *", placeholder="es. Il nome della rosa")
         autore = st.text_input("Autore *", placeholder="es. Umberto Eco")
+        edizione_anno = st.text_input("Edizione / Anno", placeholder="es. 1980, Bompiani 2012...")
         descrizione = st.text_area("Descrizione breve", placeholder="Breve trama o appunti...")
         valutazione = st.slider("Valutazione (1-10)", min_value=1, max_value=10, value=7)
         ubicazione = st.text_input("Ubicazione", placeholder="es. Mensola studio 2, Comodino...")
@@ -142,7 +146,7 @@ elif menu == "➕ Nuovo Libro":
             if not titolo.strip() or not autore.strip():
                 st.error("I campi 'Titolo' e 'Autore' sono obbligatori!")
             else:
-                add_libro(titolo.strip(), autore.strip(), descrizione.strip(), valutazione, ubicazione.strip())
+                add_libro(titolo.strip(), autore.strip(), descrizione.strip(), valutazione, ubicazione.strip(), edizione_anno.strip())
                 st.success(f"Libro '{titolo}' salvato su Supabase!")
 
 # 3. SCHERMATA: MODIFICA / ELIMINA
@@ -164,6 +168,7 @@ elif menu == "✏️ Modifica / Elimina":
                 st.text(f"ID Libro univoco: {libro_id}")
                 nuovo_titolo = st.text_input("Titolo", value=libro_selezionato.get("titolo", ""))
                 nuovo_autore = st.text_input("Autore", value=libro_selezionato.get("autore", ""))
+                nuova_edizione_anno = st.text_input("Edizione / Anno", value=libro_selezionato.get("edizione_anno") or "")
                 nuova_desc = st.text_area("Descrizione breve", value=libro_selezionato.get("descrizione") or "")
                 val_corr = libro_selezionato.get("valutazione")
                 nuova_val = st.slider("Valutazione (1-10)", min_value=1, max_value=10, value=int(val_corr) if val_corr else 5)
@@ -175,7 +180,7 @@ elif menu == "✏️ Modifica / Elimina":
                 if not nuovo_titolo.strip() or not nuovo_autore.strip():
                     st.error("I campi 'Titolo' e 'Autore' non possono essere vuoti.")
                 else:
-                    update_libro(libro_id, nuovo_titolo.strip(), nuovo_autore.strip(), nuova_desc.strip(), nuova_val, nuova_ubic.strip())
+                    update_libro(libro_id, nuovo_titolo.strip(), nuovo_autore.strip(), nuova_desc.strip(), nuova_val, nuova_ubic.strip(), nuova_edizione_anno.strip())
                     st.success("Dati aggiornati correttamente su Supabase!")
                     st.rerun()
 
